@@ -26,14 +26,6 @@
             android:exported="false"
             android:theme="@style/Theme.TurnByTurnActivity" />
         <activity
-            android:name=".ReportActivity"
-            android:exported="false"
-            android:theme="@style/Theme.TurnByTurnActivity" />
-        <activity
-            android:name=".SavedLocationsActivity"
-            android:exported="false"
-            android:theme="@style/Theme.TurnByTurnActivity" />
-        <activity
             android:name=".TurnByTurnActivity"
             android:exported="false"
             android:label="TurnByTurnActivity"
