@@ -7,7 +7,6 @@
     <uses-permission android:name="android.permission.INTERNET" />
 
     <application
-        android:usesCleartextTraffic="true"
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
@@ -16,6 +15,7 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.Mapbox"
+        android:usesCleartextTraffic="false"
         tools:targetApi="31">
         <activity
             android:name=".RiskActivity"
@@ -36,7 +36,7 @@
         <activity
             android:name=".TurnByTurnActivity"
             android:exported="false"
-            android:label="TurnByTurnActivity"
+            android:label="RERAC Navigation"
             android:theme="@style/Theme.TurnByTurnActivity" />
         <activity
             android:name=".MainActivity"
@@ -46,10 +46,6 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-
-            <meta-data
-                android:name="android.app.lib_name"
-                android:value="" />
         </activity>
     </application>
 
