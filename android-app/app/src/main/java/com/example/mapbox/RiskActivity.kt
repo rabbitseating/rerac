@@ -1,10 +1,9 @@
 package com.example.mapbox
 
-import android.annotation.SuppressLint
-import android.content.Intent
-import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
 import android.util.Log
+import android.widget.Toast
+import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.Toolbar
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
@@ -18,72 +17,87 @@ import java.io.IOException
 
 class RiskActivity : AppCompatActivity() {
 
+    private val httpClient = OkHttpClient()
+
     override fun onSupportNavigateUp(): Boolean {
-        val intent = Intent(this, TurnByTurnActivity::class.java)
-        startActivity(intent)
-        finish() // Optional: Finish the CameraActivity to remove it from the back stack
+        finish()
         return true
     }
 
-
-    @SuppressLint("MissingInflatedId")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_risk)
-        val recyclerview = findViewById<RecyclerView>(R.id.recyclerView)
-        recyclerview.layoutManager = LinearLayoutManager(this)
+
+        val recyclerView = findViewById<RecyclerView>(R.id.recyclerView).apply {
+            layoutManager = LinearLayoutManager(this@RiskActivity)
+        }
+
         val toolbar: Toolbar = findViewById(R.id.toolbar)
         setSupportActionBar(toolbar)
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
-        getlast5(recyclerview)
+
+        loadRecentRisks(recyclerView)
     }
 
-    private fun getlast5(recyclerview: RecyclerView?) {
-
-        val client = OkHttpClient()
-        val getRequest: Request = Request.Builder()
+    private fun loadRecentRisks(recyclerView: RecyclerView) {
+        val request = Request.Builder()
             .url("${BuildConfig.BACKEND_BASE_URL}/last5risks")
             .build()
 
-        client.newCall(getRequest).enqueue(object : Callback {
+        httpClient.newCall(request).enqueue(object : Callback {
             override fun onFailure(call: Call, e: IOException) {
-                e.printStackTrace()
+                Log.e(TAG, "Unable to load recent risks", e)
+                showLoadError()
             }
 
-            @Throws(IOException::class)
             override fun onResponse(call: Call, response: Response) {
-                try{
-                Log.d("RiskActivity", "onResponse called")
-                val responseData = response.body?.string() ?: ""
-                val jsonArray = JSONArray(responseData)
-                val riskList = mutableListOf<RiskData>()
-                Log.d("RiskActivity", "Response Data: $responseData")
-                for (i in 0 until jsonArray.length()) {
-                    val jsonObject = jsonArray.getJSONObject(i)
-                    val time = jsonObject.optString("time_val", "")
-                    val risk8Value = jsonObject.optInt("blk8", 0)
-                    val risk23Value = jsonObject.optInt("blk23", 0)
-                    val risk51Value = jsonObject.optInt("blk51", 0)
-                    val risk72Value = jsonObject.optInt("blk72", 0)
-                    val risk73Value = jsonObject.optInt("blk73", 0)
-                    val riskSITValue = jsonObject.optInt("blkSIT", 0)
+                response.use {
+                    if (!response.isSuccessful) {
+                        Log.w(TAG, "Recent risk request returned HTTP ${response.code}")
+                        showLoadError()
+                        return
+                    }
 
-                    val riskData = RiskData(
-                        time,risk8Value, risk23Value, risk51Value, risk72Value, risk73Value, riskSITValue
-                    )
-                    riskList.add(riskData)
+                    try {
+                        val jsonArray = JSONArray(response.body?.string().orEmpty())
+                        val risks = buildList {
+                            for (i in 0 until jsonArray.length()) {
+                                val item = jsonArray.optJSONObject(i) ?: continue
+                                add(
+                                    RiskData(
+                                        time = item.optString("time_val", ""),
+                                        risk8 = item.optInt("blk8", 0),
+                                        risk23 = item.optInt("blk23", 0),
+                                        risk51 = item.optInt("blk51", 0),
+                                        risk72 = item.optInt("blk72", 0),
+                                        risk73 = item.optInt("blk73", 0),
+                                        riskSIT = item.optInt("blkSIT", 0)
+                                    )
+                                )
+                            }
+                        }
 
-                }
-
-                runOnUiThread {
-                    val adapter = RiskDataAdapter(riskList)
-                    recyclerview?.adapter = adapter
-                }
-                }catch (e:Exception){
-                    e.printStackTrace()
+                        runOnUiThread {
+                            recyclerView.adapter = RiskDataAdapter(risks)
+                        }
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Unable to parse recent risk response", e)
+                        showLoadError()
+                    }
                 }
             }
         })
     }
 
+    private fun showLoadError() {
+        runOnUiThread {
+            if (!isFinishing && !isDestroyed) {
+                Toast.makeText(this, "Unable to load recent risk data.", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    companion object {
+        private const val TAG = "RiskActivity"
+    }
 }
