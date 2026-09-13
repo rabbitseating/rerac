@@ -20,8 +20,8 @@ jobs:
         with:
           python-version: "3.12"
       - name: Apply final small fixes
-        shell: python
         run: |
+          python - <<'PY'
           from pathlib import Path
           import re
 
@@ -67,6 +67,7 @@ jobs:
               raise RuntimeError("Expected risk state update block not found")
           text = text.replace(old, new, 1)
           path.write_text(text)
+          PY
       - name: Commit final source fixes
         run: |
           git config user.name "github-actions[bot]"
