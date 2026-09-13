@@ -40,4 +40,4 @@ npm run check
 npm start
 ```
 
-The demo schema is in `../database/schema.sql`, and `../data-generator/` contains a reconstructed mock-data generator so the portfolio version can be run without the original sensitive STREET data.
+The demo schema is in `../database/schema.sql`, and `../data-generator/` contains a reconstructed mock-data generator so the portfolio version can be run without the original non-public project dataset.
