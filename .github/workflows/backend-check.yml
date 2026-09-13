@@ -1,21 +1,38 @@
-name: Backend syntax check
+name: Portfolio source checks
 
 on:
   push:
-    paths:
-      - "backend/**"
-      - ".github/workflows/backend-check.yml"
   pull_request:
-    paths:
-      - "backend/**"
-      - ".github/workflows/backend-check.yml"
 
 jobs:
-  syntax-check:
+  source-checks:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
-      - run: node --check backend/database.js
+      - name: Check Node.js syntax
+        run: node --check backend/database.js
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Check Python generator syntax
+        run: python -m py_compile data-generator/generate_mock_data.py
+
+      - name: Check portfolio safety invariants
+        run: |
+          if git ls-files | grep -E '(^|/)(local\.properties|\.env)$'; then
+            echo "Local secret/configuration file is tracked"
+            exit 1
+          fi
+          if grep -R "GlobalScope" android-app/app/src/main/java; then
+            echo "GlobalScope should not be used by Android activities"
+            exit 1
+          fi
+          if grep -R "replayLocationEngine" android-app/app/src/main/java; then
+            echo "Mapbox replay location must not be used in the portfolio build"
+            exit 1
+          fi
