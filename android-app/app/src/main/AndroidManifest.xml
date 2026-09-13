@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
-    <!-- Always include this permission -->
-    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" /> <!-- Include only if your app benefits from precise location access. -->
+
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.INTERNET" />
 
@@ -19,23 +19,23 @@
         tools:targetApi="31">
         <activity
             android:name=".RiskActivity"
-            android:exported="true"
+            android:exported="false"
             android:theme="@style/Theme.TurnByTurnActivity" />
         <activity
             android:name=".StatisticsActivity"
-            android:exported="true"
+            android:exported="false"
             android:theme="@style/Theme.TurnByTurnActivity" />
         <activity
             android:name=".ReportActivity"
-            android:exported="true"
+            android:exported="false"
             android:theme="@style/Theme.TurnByTurnActivity" />
         <activity
             android:name=".SavedLocationsActivity"
-            android:exported="true"
+            android:exported="false"
             android:theme="@style/Theme.TurnByTurnActivity" />
         <activity
             android:name=".TurnByTurnActivity"
-            android:exported="true"
+            android:exported="false"
             android:label="TurnByTurnActivity"
             android:theme="@style/Theme.TurnByTurnActivity" />
         <activity
@@ -44,7 +44,6 @@
             android:label="@string/app_name">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
-
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
