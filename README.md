@@ -39,6 +39,7 @@ That migration allowed the final prototype to combine routing, navigation-camera
 - Historical average-risk charts by location
 - Current Singapore weather information
 - Configurable API keys and backend URL with secrets excluded from Git
+- Clearly labelled prototype-only screens for ideas that were explored but not completed
 
 ## Repository structure
 
@@ -123,7 +124,7 @@ For a physical Android device, use an address that is reachable from that device
 
 The public-facing source is intentionally separated from local secrets. API tokens, MySQL passwords, `.env`, Android `local.properties`, Gradle build outputs and `node_modules` must not be committed.
 
-The portfolio cleanup also removes unfinished navigation entries, fixes activity exposure, makes background work lifecycle-aware, validates network responses, uses the real device location rather than Mapbox replay simulation, and keeps UI updates on the main thread.
+The portfolio cleanup fixes activity exposure, replaces Mapbox replay simulation with real device location, makes background work lifecycle-aware, validates network responses, keeps UI updates on the main thread, corrects metre-based risk-radius calculations, prevents repeated proximity announcements, and consolidates duplicated chart/network code. Incomplete Saved Locations and Report-an-Issue ideas are retained only as clearly labelled prototype screens rather than being presented as finished features.
 
 ## Technology
 
@@ -132,6 +133,13 @@ The portfolio cleanup also removes unfinished navigation entries, fixes activity
 **Data:** MySQL, Python mock-data generation  
 **External service:** OpenWeather
 
+## Verification status
+
+- Node.js backend syntax is checked with `npm run check` and a small GitHub Actions workflow.
+- The reconstructed Python generator has been syntax-checked.
+- The Android source has been cleaned for the major lifecycle, threading, location and configuration issues found during review.
+- A fresh Android build is **not claimed as CI-verified** in this portfolio copy because the historical Mapbox dependency setup requires local Mapbox credentials and SDK access. The original project had previously been built and run; a future SDK migration should be tested separately rather than mixed into this archival cleanup.
+
 ## Project status
 
-This repository is a cleaned and reproducible portfolio version of an academic prototype. It preserves the original architecture and major implementation choices while fixing issues that would make the source unsafe or misleading to publish. The Mapbox/Android dependencies intentionally remain close to the original project versions rather than being blindly upgraded; a future SDK migration should be treated as a separate tested change.
+This repository is a cleaned and reproducible portfolio version of an academic prototype. It preserves the original architecture and major implementation choices while fixing issues that would make the source unsafe or misleading to publish. The Mapbox/Android dependencies intentionally remain close to the original project versions rather than being blindly upgraded.
