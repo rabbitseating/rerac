@@ -31,8 +31,8 @@ class RiskDataAdapter(private val riskList: List<RiskData>) :
 
         private fun getRiskColor(riskValue: Int): Int {
             return when {
-                riskValue >= 0 && riskValue < 3 -> ContextCompat.getColor(itemView.context, R.color.colorNormalRisk) // Green for low risk
-                riskValue >= 3 && riskValue <= 7 -> ContextCompat.getColor(itemView.context, R.color.colorMediumRisk) // Yellow for medium risk
+                riskValue < 3 -> ContextCompat.getColor(itemView.context, R.color.colorNormalRisk)
+                riskValue < 7 -> ContextCompat.getColor(itemView.context, R.color.colorMediumRisk)
                 else -> ContextCompat.getColor(itemView.context, R.color.colorHighRisk)
             }
         }
@@ -54,12 +54,8 @@ class RiskDataAdapter(private val riskList: List<RiskData>) :
         holder.textViewRisk73.text = "Block 73: ${risk.risk73}"
         holder.textViewRiskSIT.text = "SIT: ${risk.riskSIT}"
         holder.textViewTime.text = "Time: ${risk.time}"
-
         holder.setRiskColor(risk)
     }
 
     override fun getItemCount(): Int = riskList.size
 }
-
-
-
