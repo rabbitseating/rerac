@@ -4,6 +4,18 @@ RERAC is an academic intelligent-transport prototype built to visualise road-ris
 
 The project demonstrates the full path from generated transport-risk data to a location-aware mobile interface: data generation, persistence, API delivery, mapping, navigation, proximity warnings and historical visualisation.
 
+## Screenshots
+
+These screenshots were extracted from the original project report and show the final Android/Mapbox prototype. The portfolio code has since been cleaned for public release, so small visual details may differ from a fresh local build.
+
+| Map and risk visualisation | Turn-by-turn navigation |
+| --- | --- |
+| <img src="docs/images/home-map.jpg" alt="RERAC map with monitored locations and risk-radius visualisation" width="220"> | <img src="docs/images/navigation.jpg" alt="RERAC turn-by-turn navigation screen" width="220"> |
+| **Recent risk overview** | **Historical risk statistics** |
+| <img src="docs/images/risk-overview.jpg" alt="RERAC recent risk overview screen" width="220"> | <img src="docs/images/statistics.jpg" alt="RERAC historical risk statistics screen" width="220"> |
+
+The report documents the Android version's Mapbox home screen, turn-by-turn navigation, recent risk overview and location-based statistics as part of the final prototype.
+
 ## Architecture
 
 ```text
@@ -18,7 +30,7 @@ Android / Kotlin application
 Mapbox navigation + risk visualisation
 ```
 
-The original project used mock data because the underlying STREET risk-detection data was sensitive. The original Python generator was no longer available when this portfolio copy was prepared, so `data-generator/` contains a clearly labelled **reconstructed demo generator** based on the database fields and pipeline used by the application.
+The original project used mock data because the underlying project dataset was non-public. The original Python generator was no longer available when this portfolio copy was prepared, so `data-generator/` contains a clearly labelled **reconstructed demo generator** based on the database fields and pipeline used by the application.
 
 ## Why the project moved from Flutter to native Android
 
@@ -41,6 +53,17 @@ That migration allowed the final prototype to combine routing, navigation-camera
 - Configurable API keys and backend URL with secrets excluded from Git
 - Clearly labelled prototype-only screens for ideas that were explored but not completed
 
+## Demo flow
+
+A typical demonstration of the prototype is:
+
+1. Launch the Android app and grant location access.
+2. View monitored locations and their current risk-radius colours on the map.
+3. Search for a destination or select a point on the map and start turn-by-turn navigation.
+4. Approach a monitored location to trigger the visual risk/TTC indicator and text-to-speech proximity warning.
+5. Open **Risk Overview** to inspect the latest backend snapshots.
+6. Open **Statistics** to compare historical average-risk values across monitored locations.
+
 ## Repository structure
 
 ```text
@@ -48,7 +71,8 @@ android-app/       Final Kotlin / Mapbox Android application
 backend/           Node.js / Express REST API
 database/          Reconstructed MySQL schema for the demo environment
 data-generator/    Reconstructed Python mock-data generator
-.github/workflows/ Lightweight backend syntax check
+docs/images/       Screenshots extracted from the original project report
+.github/workflows/ Lightweight source checks
 ```
 
 ## Quick start
@@ -120,9 +144,11 @@ For a physical Android device, use an address that is reachable from that device
 - `GET /risk73`
 - `GET /riskSIT`
 
-## Security and portfolio cleanup
+## Security and privacy
 
 The public-facing source is intentionally separated from local secrets. API tokens, MySQL passwords, `.env`, Android `local.properties`, Gradle build outputs and `node_modules` must not be committed.
+
+The repository contains **generated/demo data only**. It does not include the original non-public dataset or local credentials. The screenshots are from the project's own report and are included only to demonstrate the prototype UI.
 
 The portfolio cleanup fixes activity exposure, replaces Mapbox replay simulation with real device location, makes background work lifecycle-aware, validates network responses, keeps UI updates on the main thread, corrects metre-based risk-radius calculations, prevents repeated proximity announcements, and consolidates duplicated chart/network code. Incomplete Saved Locations and Report-an-Issue ideas are retained only as clearly labelled prototype screens rather than being presented as finished features.
 
@@ -133,9 +159,17 @@ The portfolio cleanup fixes activity exposure, replaces Mapbox replay simulation
 **Data:** MySQL, Python mock-data generation  
 **External service:** OpenWeather
 
+## Prototype limitations and future work
+
+- The portfolio repository uses generated data rather than the original non-public project dataset.
+- The prototype is geographically focused on the monitored campus locations used during the project.
+- The Mapbox/Android dependencies intentionally remain close to the original implementation rather than being blindly upgraded to a newer major SDK.
+- Saved Locations and Report-an-Issue remain prototype concepts rather than completed production features.
+- A production deployment would use an HTTPS-hosted backend, stronger API authentication, persistent user preferences and broader automated Android testing.
+
 ## Verification status
 
-- Node.js backend syntax is checked with `npm run check` and a small GitHub Actions workflow.
+- Node.js backend syntax is checked with `npm run check` and GitHub Actions.
 - The reconstructed Python generator has been syntax-checked.
 - The Android source has been cleaned for the major lifecycle, threading, location and configuration issues found during review.
 - A fresh Android build is **not claimed as CI-verified** in this portfolio copy because the historical Mapbox dependency setup requires local Mapbox credentials and SDK access. The original project had previously been built and run; a future SDK migration should be tested separately rather than mixed into this archival cleanup.
