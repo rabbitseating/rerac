@@ -1,15 +1,15 @@
 <resources>
-    <string name="app_name">Mapbox</string>
-<string name="noTokenDialogTitle">Error: no mapbox access token</string>
-    <string name="noTokenDialogBody">Please put your mapbox access token to res/values/mapbox_access_token.xml</string>
-    <string name="open_nav">Open Navigation Drawer</string>
-    <string name="close_nav">Close Navigation Drawer</string>
-    <string name="email">James@gmail.com</string>
-    <string name="name">James</string>
-    <string name="simple_ui_toolbar_title">Mapbox Search</string>
+    <string name="app_name">RERAC</string>
+    <string name="noTokenDialogTitle">Mapbox access token required</string>
+    <string name="noTokenDialogBody">Add MAPBOX_ACCESS_TOKEN to android-app/local.properties before running the app.</string>
+    <string name="open_nav">Open navigation drawer</string>
+    <string name="close_nav">Close navigation drawer</string>
+    <string name="nav_header_title">RERAC</string>
+    <string name="nav_header_subtitle">Intelligent Transport Prototype</string>
+    <string name="simple_ui_toolbar_title">Location Search</string>
     <string name="place_autocomplete_query_hint">Search for places</string>
     <string name="place_autocomplete_reverse_geocoding_error_message">Unable to locate selected coordinate</string>
-    <string name="place_autocomplete_selection_error">Error happened during request</string>
+    <string name="place_autocomplete_selection_error">Unable to load the selected place</string>
     <string name="weather"><u>Weather</u></string>
     <string name="Block23">Block 23</string>
     <string name="block_8">Block 8</string>

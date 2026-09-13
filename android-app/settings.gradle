@@ -5,15 +5,20 @@ pluginManagement {
         gradlePluginPortal()
     }
 }
+
 def localProperties = new Properties()
 def localPropertiesFile = new File(rootDir, 'local.properties')
 if (localPropertiesFile.exists()) {
     localPropertiesFile.withInputStream { localProperties.load(it) }
 }
-def mapboxDownloadsToken = providers.gradleProperty('MAPBOX_DOWNLOADS_TOKEN')
-        .orElse(System.getenv('MAPBOX_DOWNLOADS_TOKEN') ?: '')
-        .orElse(localProperties.getProperty('MAPBOX_DOWNLOADS_TOKEN', ''))
-        .get()
+
+def mapboxDownloadsToken = providers.gradleProperty('MAPBOX_DOWNLOADS_TOKEN').orNull
+if (!mapboxDownloadsToken) {
+    mapboxDownloadsToken = System.getenv('MAPBOX_DOWNLOADS_TOKEN')
+}
+if (!mapboxDownloadsToken) {
+    mapboxDownloadsToken = localProperties.getProperty('MAPBOX_DOWNLOADS_TOKEN', '')
+}
 
 dependencyResolutionManagement {
     repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
@@ -26,15 +31,13 @@ dependencyResolutionManagement {
                 basic(BasicAuthentication)
             }
             credentials {
-                // Do not change the username below.
-                // This should always be `mapbox` (not your username).
-                username = "mapbox"
-                // Use the secret token you stored in gradle.properties as the password
+                username = 'mapbox'
                 password = mapboxDownloadsToken
             }
-            }
-        maven { url "https://jitpack.io" }
+        }
+        maven { url 'https://jitpack.io' }
     }
 }
-rootProject.name = "Mapbox"
+
+rootProject.name = 'RERAC'
 include ':app'

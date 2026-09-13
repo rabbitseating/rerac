@@ -1,36 +1,32 @@
 <?xml version="1.0" encoding="utf-8"?>
-<menu
-    xmlns:android="http://schemas.android.com/apk/res/android"
+<menu xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
-    tools:showIn = "navigation_view">
+    tools:showIn="navigation_view">
 
-    <group
-        android:checkableBehavior="single">
-
+    <group android:checkableBehavior="single">
         <item
             android:id="@+id/nav_home"
             android:icon="@drawable/baseline_home_24"
-            android:title="Home"/>
+            android:title="Home" />
 
         <item
             android:id="@+id/nav_camera"
             android:icon="@drawable/baseline_warning_24"
-            android:title="Risk Overview"/>
-
+            android:title="Risk Overview" />
 
         <item
             android:id="@+id/nav_stats"
             android:icon="@drawable/baseline_query_stats_24"
-            android:title="Statistics"/>
+            android:title="Statistics" />
 
         <item
             android:id="@+id/nav_saved"
             android:icon="@drawable/baseline_saved_search_24"
-            android:title="Saved Locations"/>
+            android:title="Saved Locations (prototype)" />
 
         <item
             android:id="@+id/nav_report"
             android:icon="@drawable/baseline_report_24"
-            android:title="Report an Issue"/>
+            android:title="Report an Issue (prototype)" />
     </group>
 </menu>

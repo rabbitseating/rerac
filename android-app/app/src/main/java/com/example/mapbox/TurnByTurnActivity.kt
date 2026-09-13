@@ -15,6 +15,7 @@ import android.graphics.drawable.Drawable
 import android.location.Location
 import android.os.Bundle
 import android.os.Handler
+import android.os.Looper
 import android.speech.tts.TextToSpeech
 import android.text.Editable
 import android.text.TextWatcher
@@ -90,10 +91,6 @@ import com.mapbox.navigation.core.formatter.MapboxDistanceFormatter
 import com.mapbox.navigation.core.lifecycle.MapboxNavigationApp
 import com.mapbox.navigation.core.lifecycle.MapboxNavigationObserver
 import com.mapbox.navigation.core.lifecycle.requireMapboxNavigation
-import com.mapbox.navigation.core.replay.MapboxReplayer
-import com.mapbox.navigation.core.replay.ReplayLocationEngine
-import com.mapbox.navigation.core.replay.route.ReplayProgressObserver
-import com.mapbox.navigation.core.replay.route.ReplayRouteMapper
 import com.mapbox.navigation.core.trip.session.LocationMatcherResult
 import com.mapbox.navigation.core.trip.session.LocationObserver
 import com.mapbox.navigation.core.trip.session.RouteProgressObserver
@@ -140,8 +137,8 @@ import com.mapbox.search.ui.view.place.SearchPlaceBottomSheetView
 import com.mapbox.turf.TurfConstants
 import com.mapbox.turf.TurfMeasurement
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import okhttp3.Call
 import okhttp3.Callback
 import okhttp3.OkHttpClient
@@ -167,14 +164,11 @@ import java.util.Locale
  * </resources>
  *
  * The example assumes that you have granted location permissions and does not enforce it. However,
- * the permission is essential for proper functioning of this example. The example also uses replay
- * location engine to facilitate navigation without actually physically moving.
+ * the permission is essential for proper functioning of this example. The final portfolio version uses the device location for navigation.
  *
  * How to use this example:
  * - You can long-click the map to select a destination.
- * - The guidance will start to the selected destination while simulating location updates.
- * You can disable simulation by commenting out the [replayLocationEngine] setter in [NavigationOptions].
- * Then, the device's real location will be used.
+ * - The guidance starts to the selected destination using device location updates.
  * - At any point in time you can finish guidance or select a new destination.
  * - You can use buttons to mute/unmute voice instructions, recenter the camera, or show the route overview.
  */
@@ -199,6 +193,9 @@ class TurnByTurnActivity : AppCompatActivity(), NavigationView.OnNavigationItemS
     private val geofenceRiskMap = mutableMapOf<String, Int>()
     private val geofenceTTCMap = mutableMapOf<String, Double>()
     private var soundtoggle = true
+    private val httpClient = OkHttpClient()
+    private var lastGeofenceId: String? = null
+    private var lastGeofenceZone: String? = null
     private var polygonAnnotation23: PolygonAnnotation? = null
     private var polygonAnnotationManager23: PolygonAnnotationManager? = null
     private var polygonAnnotation8: PolygonAnnotation? = null
@@ -278,20 +275,6 @@ class TurnByTurnActivity : AppCompatActivity(), NavigationView.OnNavigationItemS
         )
     }
 
-    /**
-     * Debug tool used to play, pause and seek route progress events that can be used to produce mocked location updates along the route.
-     */
-    private val mapboxReplayer = MapboxReplayer()
-
-    /**
-     * Debug tool that mocks location updates with an input from the [mapboxReplayer].
-     */
-    private val replayLocationEngine = ReplayLocationEngine(mapboxReplayer)
-
-    /**
-     * Debug observer that makes sure the replayer has always an up-to-date information to generate mock updates.
-     */
-    private val replayProgressObserver = ReplayProgressObserver(mapboxReplayer)
 
     /**
      * Bindings to the example layout.
@@ -583,7 +566,6 @@ class TurnByTurnActivity : AppCompatActivity(), NavigationView.OnNavigationItemS
                 mapboxNavigation.registerRoutesObserver(routesObserver)
                 mapboxNavigation.registerLocationObserver(locationObserver)
                 mapboxNavigation.registerRouteProgressObserver(routeProgressObserver)
-                mapboxNavigation.registerRouteProgressObserver(replayProgressObserver)
                 mapboxNavigation.registerVoiceInstructionsObserver(voiceInstructionsObserver)
                 // start the trip session to being receiving location updates in free drive
                 // and later when a route is set also receiving route progress updates
@@ -594,7 +576,6 @@ class TurnByTurnActivity : AppCompatActivity(), NavigationView.OnNavigationItemS
                 mapboxNavigation.unregisterRoutesObserver(routesObserver)
                 mapboxNavigation.unregisterLocationObserver(locationObserver)
                 mapboxNavigation.unregisterRouteProgressObserver(routeProgressObserver)
-                mapboxNavigation.unregisterRouteProgressObserver(replayProgressObserver)
                 mapboxNavigation.unregisterVoiceInstructionsObserver(voiceInstructionsObserver)
             }
         },
@@ -610,17 +591,17 @@ class TurnByTurnActivity : AppCompatActivity(), NavigationView.OnNavigationItemS
         //graph
 
         val barChart1: BarChart = findViewById(R.id.ONClickbarChart1)
-        fetchDataFromServer23(barChart1)//blk23 graph
+        fetchChartData(barChart1, "risk23")
         val barChart8: BarChart = findViewById(R.id.ONClickbarChart8)
-        fetchDataFromServer(barChart8)//blk 8 graph
+        fetchChartData(barChart8, "risk8")
         val barChartSIT: BarChart = findViewById(R.id.ONClickbarChartSIT)
-        fetchDataFromServerSIT(barChartSIT)//blkSIT graph
+        fetchChartData(barChartSIT, "riskSIT")
         val barChart72: BarChart = findViewById(R.id.ONClickbarChart72)
-        fetchDataFromServer72(barChart72)//blk 72 graph
+        fetchChartData(barChart72, "risk72")
         val barChart73: BarChart = findViewById(R.id.ONClickbarChart73)
-        fetchDataFromServer73(barChart73)//blk 73 graph
+        fetchChartData(barChart73, "risk73")
         val barChart51: BarChart = findViewById(R.id.ONClickbarChart51)
-        fetchDataFromServer51(barChart51)//blk 51 graph
+        fetchChartData(barChart51, "risk51")
 
 
         //Getting mysql data
@@ -776,6 +757,7 @@ class TurnByTurnActivity : AppCompatActivity(), NavigationView.OnNavigationItemS
         riskradiusimg.setOnClickListener {
             isBorderVisible2 = !isBorderVisible2
             isRiskRadius = !isRiskRadius
+            setRiskRadiusVisible(isRiskRadius)
             if (isBorderVisible2) {
                 riskradiusimg.setBackgroundResource(R.drawable.border_selector)
             } else {
@@ -1007,59 +989,53 @@ class TurnByTurnActivity : AppCompatActivity(), NavigationView.OnNavigationItemS
     private fun fetchWeatherData() {
         val url = "https://api.openweathermap.org/data/2.5/weather?q=$cityName&appid=$apiKey&units=metric"
 
-        val client = OkHttpClient()
-
         val request = Request.Builder()
             .url(url)
             .build()
 
-        client.newCall(request).enqueue(object : Callback {
+        httpClient.newCall(request).enqueue(object : Callback {
             override fun onResponse(call: Call, response: Response) {
-                val responseData = response.body?.string()
-                val weatherResponse = JSONObject(responseData)
-
-                val mainData = weatherResponse.getJSONObject("main")
-                val temperature = mainData.getDouble("temp")
-                val humidity = mainData.getInt("humidity")
-
-                val weatherArray = weatherResponse.getJSONArray("weather")
-                val weatherObject = weatherArray.getJSONObject(0)
-                val weatherDescription = weatherObject.getString("description")
-
-                // Update your UI with the weather data
-                // For example, update TextViews with the retrieved data
-                runOnUiThread {
-                    // Update your UI with the weather data
-                    val textViewTemperature = findViewById<TextView>(R.id.textViewTemperature)
-                    val textViewHumidity = findViewById<TextView>(R.id.textViewHumidity)
-                    val textViewWeatherDescription = findViewById<TextView>(R.id.textViewWeatherDescription)
-
-                    textViewTemperature.text = "Temperature: $temperature °C"
-                    textViewHumidity.text = "Humidity: $humidity%"
-                    textViewWeatherDescription.text = "Description: $weatherDescription"
+                response.use {
+                    if (!response.isSuccessful) {
+                        Log.w("Weather", "Weather request failed with HTTP ${response.code}")
+                        return
+                    }
+                    try {
+                        val weatherResponse = JSONObject(response.body?.string().orEmpty())
+                        val mainData = weatherResponse.getJSONObject("main")
+                        val temperature = mainData.getDouble("temp")
+                        val humidity = mainData.getInt("humidity")
+                        val weatherDescription = weatherResponse.getJSONArray("weather")
+                            .getJSONObject(0).getString("description")
+                        runOnUiThread {
+                            findViewById<TextView>(R.id.textViewTemperature).text = "Temperature: $temperature °C"
+                            findViewById<TextView>(R.id.textViewHumidity).text = "Humidity: $humidity%"
+                            findViewById<TextView>(R.id.textViewWeatherDescription).text = "Description: $weatherDescription"
+                        }
+                    } catch (e: Exception) {
+                        Log.e("Weather", "Unable to parse weather response", e)
+                    }
                 }
             }
 
             override fun onFailure(call: Call, e: IOException) {
-                // Handle network error
+                Log.e("Weather", "Weather request failed", e)
             }
         })
     }
 
 
     override fun onDestroy() {
-        super.onDestroy()
-        //handler.removeCallbacks(updateDataRunnable)
-        mapboxReplayer.finish()
+        handler.removeCallbacks(dataFetchRunnable)
         maneuverApi.cancel()
         routeLineApi.cancel()
         routeLineView.cancel()
         speechApi.cancel()
         voiceInstructionsPlayer.shutdown()
-        if(tts != null){
-            tts!!.stop()
-            tts!!.shutdown()
-        }
+        tts?.stop()
+        tts?.shutdown()
+        tts = null
+        super.onDestroy()
     }
 
     private fun initNavigation() {
@@ -1067,7 +1043,6 @@ class TurnByTurnActivity : AppCompatActivity(), NavigationView.OnNavigationItemS
             NavigationOptions.Builder(this)
                 .accessToken(getString(R.string.mapbox_access_token))
                 // comment out the location engine setting block to disable simulation
-                .locationEngine(replayLocationEngine)
                 .build()
         )
 
@@ -1082,21 +1057,6 @@ class TurnByTurnActivity : AppCompatActivity(), NavigationView.OnNavigationItemS
             )
             enabled = true
         }
-//comment it out for testing
-        replayOriginLocation()
-    }
-//change location for current location
-    private fun replayOriginLocation() {
-        mapboxReplayer.pushEvents(
-            listOf(
-                ReplayRouteMapper.mapToUpdateLocation(
-                    Date().time.toDouble(),
-                    Point.fromLngLat( 103.774232,1.334372)
-                )
-            )
-        )
-        mapboxReplayer.playFirstLocation()
-        mapboxReplayer.playbackSpeed(3.0)
     }
 
     private fun findRoute(destination: Point) {
@@ -1174,7 +1134,6 @@ class TurnByTurnActivity : AppCompatActivity(), NavigationView.OnNavigationItemS
         mapboxNavigation.setNavigationRoutes(listOf())
 
         // stop simulation
-        mapboxReplayer.stop()
 
         // hide UI elements
         binding.soundButton.visibility = View.INVISIBLE
@@ -1198,8 +1157,8 @@ class TurnByTurnActivity : AppCompatActivity(), NavigationView.OnNavigationItemS
             this@TurnByTurnActivity,
             R.drawable.camera_icon
         )?.let {
-            val annotationApi = mapView?.annotations
-            val pointAnnotationManager = annotationApi?.createPointAnnotationManager(mapView!!)
+            val currentMapView = mapView ?: return@let
+            val pointAnnotationManager = currentMapView.annotations.createPointAnnotationManager(currentMapView)
 // Set options for the resulting symbol layer.
             val pointAnnotationOptions: PointAnnotationOptions = PointAnnotationOptions()
 // Define a geographic coordinate.
@@ -1217,7 +1176,7 @@ class TurnByTurnActivity : AppCompatActivity(), NavigationView.OnNavigationItemS
                             id = "23"
                             val targetLat = 1.33397173881531
                             val targetLng = 103.77531433105469
-                            val targetCoordinate = Point.fromLngLat(targetLat, targetLng)
+                            val targetCoordinate = Point.fromLngLat(targetLng, targetLat)
                             CameraOptions.Builder()
                                 .center(targetCoordinate)
                                 .zoom(15.0)
@@ -1241,7 +1200,7 @@ class TurnByTurnActivity : AppCompatActivity(), NavigationView.OnNavigationItemS
                             id ="8"
                             val targetLat = 1.3349557
                             val targetLng = 103.7758805
-                            val targetCoordinate = Point.fromLngLat(targetLat, targetLng)
+                            val targetCoordinate = Point.fromLngLat(targetLng, targetLat)
                             CameraOptions.Builder()
                                 .center(targetCoordinate)
                                 .zoom(15.0)
@@ -1265,7 +1224,7 @@ class TurnByTurnActivity : AppCompatActivity(), NavigationView.OnNavigationItemS
                             id ="SIT"
                             val targetLat = 1.333876
                             val targetLng = 103.773636
-                            val targetCoordinate = Point.fromLngLat(targetLat, targetLng)
+                            val targetCoordinate = Point.fromLngLat(targetLng, targetLat)
                             CameraOptions.Builder()
                                 .center(targetCoordinate)
                                 .zoom(15.0)
@@ -1289,7 +1248,7 @@ class TurnByTurnActivity : AppCompatActivity(), NavigationView.OnNavigationItemS
                             id ="51"
                             val targetLat = 1.3325963
                             val targetLng = 103.774189
-                            val targetCoordinate = Point.fromLngLat(targetLat, targetLng)
+                            val targetCoordinate = Point.fromLngLat(targetLng, targetLat)
                             CameraOptions.Builder()
                                 .center(targetCoordinate)
                                 .zoom(15.0)
@@ -1313,7 +1272,7 @@ class TurnByTurnActivity : AppCompatActivity(), NavigationView.OnNavigationItemS
                             id ="72"
                             val targetLat = 1.3318412
                             val targetLng = 103.7753838
-                            val targetCoordinate = Point.fromLngLat(targetLat, targetLng)
+                            val targetCoordinate = Point.fromLngLat(targetLng, targetLat)
                             CameraOptions.Builder()
                                 .center(targetCoordinate)
                                 .zoom(15.0)
@@ -1337,7 +1296,7 @@ class TurnByTurnActivity : AppCompatActivity(), NavigationView.OnNavigationItemS
                             id ="73"
                             val targetLat = 1.332582
                             val targetLng = 103.776578
-                            val targetCoordinate = Point.fromLngLat(targetLat, targetLng)
+                            val targetCoordinate = Point.fromLngLat(targetLng, targetLat)
                             CameraOptions.Builder()
                                 .center(targetCoordinate)
                                 .zoom(15.0)
@@ -1390,75 +1349,57 @@ class TurnByTurnActivity : AppCompatActivity(), NavigationView.OnNavigationItemS
         }
     }
 
-    //Circle Around Markers
+    // Circle around each monitored camera location. Turf keeps the radius in real metres.
     private fun addCircleToMarker(lng: Double, lat: Double) {
-        val annotationApi = mapView?.annotations
-        val polygonAnnotationManager = annotationApi?.createPolygonAnnotationManager(mapView!!)
-
-        // Define a fixed geographical radius in meters
-        val fixedRadiusInMeters = 15.0
-
-        // Calculate the circle radius based on the zoom level
-        val currentZoomLevel = mapView?.getMapboxMap()?.cameraState?.zoom ?: 0.0
-        val adjustedRadiusInMeters = fixedRadiusInMeters / Math.pow(2.0, 15 - currentZoomLevel)
-
-        // Calculate the polygon points to create a circle
-        val points = ArrayList<Point>()
-        val numPoints = 100
-        val anglePerPoint = 360.0 / numPoints
-        for (i in 0 until numPoints) {
-            val angle = i * anglePerPoint
-            val x = lng + adjustedRadiusInMeters * Math.cos(Math.toRadians(angle))
-            val y = lat + adjustedRadiusInMeters * Math.sin(Math.toRadians(angle))
-            points.add(Point.fromLngLat(x, y))
+        val currentMapView = mapView ?: return
+        val polygonAnnotationManager = currentMapView.annotations.createPolygonAnnotationManager(currentMapView)
+        val center = Point.fromLngLat(lng, lat)
+        val points = (0..64).map { index ->
+            TurfMeasurement.destination(
+                center,
+                15.0,
+                index * (360.0 / 64.0),
+                TurfConstants.UNIT_METERS
+            )
         }
-
-        // Set options for the resulting polygon layer
-        val polygonAnnotationOptions: PolygonAnnotationOptions = PolygonAnnotationOptions()
+        val options = PolygonAnnotationOptions()
             .withPoints(listOf(points))
             .withFillColor("#00ff00")
             .withFillOpacity(0.2)
             .withDraggable(false)
-            .withFillOutlineColor("#00ff00") // You can choose to use the same color for outline as well
+            .withFillOutlineColor("#00ff00")
 
-        if(lat==  1.333706 && lng ==103.775743 )
-        {
-            polygonAnnotation23=polygonAnnotationManager?.create(polygonAnnotationOptions)
-            polygonAnnotationManager23 = polygonAnnotationManager
-            Log.d("Circle created","Blk 23 circle created")
+        when {
+            lat == 1.333706 && lng == 103.775743 -> { polygonAnnotation23 = polygonAnnotationManager.create(options); polygonAnnotationManager23 = polygonAnnotationManager }
+            lat == 1.3349557 && lng == 103.7758805 -> { polygonAnnotation8 = polygonAnnotationManager.create(options); polygonAnnotationManager8 = polygonAnnotationManager }
+            lat == 1.333876 && lng == 103.773636 -> { polygonAnnotationSIT = polygonAnnotationManager.create(options); polygonAnnotationManagerSIT = polygonAnnotationManager }
+            lat == 1.3325963 && lng == 103.774189 -> { polygonAnnotation51 = polygonAnnotationManager.create(options); polygonAnnotationManager51 = polygonAnnotationManager }
+            lat == 1.3318412 && lng == 103.7753838 -> { polygonAnnotation72 = polygonAnnotationManager.create(options); polygonAnnotationManager72 = polygonAnnotationManager }
+            lat == 1.332582 && lng == 103.776578 -> { polygonAnnotation73 = polygonAnnotationManager.create(options); polygonAnnotationManager73 = polygonAnnotationManager }
         }
-        if(lng==103.7758805 && lat ==1.3349557)
-        {
-            polygonAnnotation8=polygonAnnotationManager?.create(polygonAnnotationOptions)
-            polygonAnnotationManager8 = polygonAnnotationManager
-        }
-        if(lng==103.773636 && lat ==1.333876)
-        {
-            polygonAnnotationSIT=polygonAnnotationManager?.create(polygonAnnotationOptions)
-            polygonAnnotationManagerSIT = polygonAnnotationManager
-        }
-        if(lng==103.774189 && lat ==1.3325963)
-        {
-            polygonAnnotation51=polygonAnnotationManager?.create(polygonAnnotationOptions)
-            polygonAnnotationManager51 = polygonAnnotationManager
-        }
-        if(lng==103.7753838 && lat ==1.3318412)
-        {
-            polygonAnnotation72=polygonAnnotationManager?.create(polygonAnnotationOptions)
-            polygonAnnotationManager72 = polygonAnnotationManager
-        }
-        if(lng==103.776578 && lat ==1.332582)
-        {
-            polygonAnnotation73=polygonAnnotationManager?.create(polygonAnnotationOptions)
-            polygonAnnotationManager73 = polygonAnnotationManager
-        }
+    }
 
+    private fun setRiskRadiusVisible(visible: Boolean) {
+        val opacity = if (visible) 0.2 else 0.0
+        listOf(
+            polygonAnnotation23 to polygonAnnotationManager23,
+            polygonAnnotation8 to polygonAnnotationManager8,
+            polygonAnnotation51 to polygonAnnotationManager51,
+            polygonAnnotation72 to polygonAnnotationManager72,
+            polygonAnnotation73 to polygonAnnotationManager73,
+            polygonAnnotationSIT to polygonAnnotationManagerSIT
+        ).forEach { (annotation, manager) ->
+            annotation?.let { item ->
+                item.fillOpacity = opacity
+                manager?.update(item)
+            }
+        }
     }
 
     private fun getColorForRisk(riskValue: Int): String {
         return when {
             riskValue >= 0 && riskValue < 3 -> "#00ff00" // Green for low risk
-            riskValue >= 3 && riskValue <= 7 -> "#ffff00" // Yellow for medium risk
+            riskValue >= 3 && riskValue < 7 -> "#ffff00" // Yellow for medium risk
             else -> "#ff0000" // Red for high risk
         }
     }
@@ -1638,6 +1579,7 @@ class TurnByTurnActivity : AppCompatActivity(), NavigationView.OnNavigationItemS
     fun LocationEngine.lastKnownLocation(context: Context, callback: (Point?) -> Unit) {
         if (!PermissionsManager.areLocationPermissionsGranted(context)) {
             callback(null)
+            return
         }
 
         getLastLocation(object : LocationEngineCallback<LocationEngineResult> {
@@ -1688,96 +1630,49 @@ class TurnByTurnActivity : AppCompatActivity(), NavigationView.OnNavigationItemS
         tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, null)
     }
 
-    @SuppressLint("MissingPermission", "SuspiciousIndentation")
     private fun calculateDistance() {
-        val riskImage:ImageView = findViewById(R.id.riskimg)
-        val ttc:TextView = findViewById(R.id.ttc)
+        val currentLocation = userLocation ?: return
+        val currentPoint = Point.fromLngLat(currentLocation.longitude, currentLocation.latitude)
+        val riskImage: ImageView = findViewById(R.id.riskimg)
+        val ttcView: TextView = findViewById(R.id.ttc)
+
+        val nearest = _geofenceList.map { geofence ->
+            val point = Point.fromLngLat(geofence.longitude, geofence.latitude)
+            geofence to TurfMeasurement.distance(currentPoint, point, TurfConstants.UNIT_METERS)
+        }.minByOrNull { it.second }
+
         runOnUiThread {
-            for (geofence in _geofenceList) {
-                val currentPosition = userLocation
-
-                val currentPoint = currentPosition?.let {
-                    Point.fromLngLat(it.longitude, it.latitude)
-                }
-                val geofencePoint = Point.fromLngLat(geofence.longitude, geofence.latitude)
-                Log.d("User Location", "User Location: $currentPoint")
-                Log.d("Geofence point", "Geofence point: ${geofence.id}")
-
-                val distanceInMeters = TurfMeasurement.distance(
-                    currentPoint!!,
-                    geofencePoint,
-                    TurfConstants.UNIT_METERS
-                )
-                Log.d("Distance in Meters", "Distance in Meters: $distanceInMeters")
-
-
-                if (distanceInMeters <= 100 && distanceInMeters > 50) {
-                    riskImage.visibility = View.INVISIBLE
-                    ttc.visibility = View.INVISIBLE
-                    Log.d("Distance", "You are 100m away from ${geofence.id}")
-                    val message = "You are 100 meters away from ${geofence.id}"
-
-                    if (soundtoggle) {
-                        speakOut(message)
-                    }
-                    break
-                }
-                if (distanceInMeters <= 50 && distanceInMeters > 30) {
-                    userIsWithinGeofence = true
-                    riskImage.visibility = View.VISIBLE
-                    ttc.visibility = View.VISIBLE
-                    Log.d("Distance", "You are 50m away from ${geofence.id}")
-                    val message = "You are 50 meters away from ${geofence.id}"
-                    if (soundtoggle) {
-                        speakOut(message)
-                    }
-                    val geofenceId = geofence.id
-                    val riskValue = geofenceRiskMap[geofenceId] ?: 0
-                    val ttcValue = geofenceTTCMap[geofenceId]?.toDouble() ?: 0.0
-                    ttc.text = String.format("TTC:%.2f", ttcValue)
-                    when {
-                        riskValue >= 0 && riskValue < 3 -> riskImage.setImageResource(R.drawable.risk_green)
-                        riskValue >= 3 && riskValue <= 7 -> riskImage.setImageResource(R.drawable.risk_yellow)
-                        else -> riskImage.setImageResource(R.drawable.risk_red)
-                    }
-                    // Once we find a geofence within 50 meters, we can exit the loop
-                    break
-
-                }
-
-                if (distanceInMeters <= 30) {
-                    userIsWithinGeofence = true
-                    riskImage.visibility = View.VISIBLE
-                    ttc.visibility = View.VISIBLE
-
-                    Log.d("Distance", "You are nearby ${geofence.id}")
-                    val message = "You are nearby ${geofence.id}"
-                    if (soundtoggle) {
-                        speakOut(message)
-                    }
-
-                    val geofenceId = geofence.id
-                    val riskValue = geofenceRiskMap[geofenceId] ?: 0
-                    val ttcValue = geofenceTTCMap[geofenceId]?.toDouble() ?: 0.0
-                    ttc.text = String.format("TTC:%.2f", ttcValue)
-
-                    when {
-                        riskValue >= 0 && riskValue < 3 -> riskImage.setImageResource(R.drawable.risk_green)
-                        riskValue >= 3 && riskValue <= 7 -> riskImage.setImageResource(R.drawable.risk_yellow)
-                        else -> riskImage.setImageResource(R.drawable.risk_red)
-                    }
-                    // Once we find a geofence within 50 meters, we can exit the loop
-                    break
-                }
-                if (distanceInMeters > 50) {
-                    riskImage.visibility = View.INVISIBLE
-                    ttc.visibility = View.INVISIBLE
-                }
-
-            }
-            if (!userIsWithinGeofence) {
+            if (nearest == null || nearest.second > 50.0) {
+                userIsWithinGeofence = false
                 riskImage.visibility = View.INVISIBLE
-                ttc.visibility = View.INVISIBLE
+                ttcView.visibility = View.INVISIBLE
+                lastGeofenceId = null
+                lastGeofenceZone = null
+                return@runOnUiThread
+            }
+
+            val (geofence, distanceMeters) = nearest
+            userIsWithinGeofence = true
+            riskImage.visibility = View.VISIBLE
+            ttcView.visibility = View.VISIBLE
+            val riskValue = geofenceRiskMap[geofence.id] ?: 0
+            val ttcValue = geofenceTTCMap[geofence.id] ?: 0.0
+            ttcView.text = String.format(Locale.US, "TTC: %.2f", ttcValue)
+            riskImage.setImageResource(
+                when {
+                    riskValue < 3 -> R.drawable.risk_green
+                    riskValue < 7 -> R.drawable.risk_yellow
+                    else -> R.drawable.risk_red
+                }
+            )
+
+            val zone = if (distanceMeters <= 25.0) "nearby" else "50m"
+            if (lastGeofenceId != geofence.id || lastGeofenceZone != zone) {
+                if (soundtoggle) {
+                    speakOut(if (zone == "nearby") "You are nearby ${geofence.id}" else "You are 50 meters away from ${geofence.id}")
+                }
+                lastGeofenceId = geofence.id
+                lastGeofenceZone = zone
             }
         }
     }
@@ -1861,8 +1756,7 @@ class TurnByTurnActivity : AppCompatActivity(), NavigationView.OnNavigationItemS
     override fun onNavigationItemSelected(item: MenuItem): Boolean {
         when (item.itemId) {
             R.id.nav_home -> {
-                val intent = Intent(this, TurnByTurnActivity::class.java)
-                startActivity(intent)
+                // Already on the navigation screen.
             }
             R.id.nav_camera -> {
                 val intent = Intent(this, RiskActivity::class.java)
@@ -1886,661 +1780,144 @@ class TurnByTurnActivity : AppCompatActivity(), NavigationView.OnNavigationItemS
         return true
     }
 
-    private val handler = Handler()
-    private val delay: Long = 3000 // 3 seconds in milliseconds
-
-    private fun startDataFetching() {
-        handler.postDelayed(object : Runnable {
-            override fun run() {
-                // Call the GettingData function here to fetch data
-                GettingData()
-                handler.postDelayed(this, delay)
-            }
-        }, delay)
+    private val handler = Handler(Looper.getMainLooper())
+    private val delay: Long = 3000
+    private val dataFetchRunnable = object : Runnable {
+        override fun run() {
+            gettingData()
+            handler.postDelayed(this, delay)
+        }
     }
 
-    private fun GettingData() {
+    private fun startDataFetching() {
+        handler.postDelayed(dataFetchRunnable, delay)
+    }
 
-        val client = OkHttpClient()
-        val getRequest: Request = Request.Builder()
-            .url("${BuildConfig.BACKEND_BASE_URL}/risks")
-            .build()
-
-        client.newCall(getRequest).enqueue(object : Callback {
+    private fun gettingData() {
+        val request = Request.Builder().url("${BuildConfig.BACKEND_BASE_URL}/risks").build()
+        httpClient.newCall(request).enqueue(object : Callback {
             override fun onFailure(call: Call, e: IOException) {
-                e.printStackTrace()
+                Log.e("RiskData", "Risk request failed", e)
             }
 
-            @SuppressLint("SuspiciousIndentation")
-            @Throws(IOException::class)
             override fun onResponse(call: Call, response: Response) {
-                val responseData = response.body?.string() ?: ""
-                val jsonArray = JSONArray(responseData)
-                if (jsonArray.length() > 0) {
-                    val jsonObject = jsonArray.getJSONObject(0)
-                    geofenceRiskMap["Blk 51"] = jsonObject.optInt("blk51", 0)
-                    geofenceRiskMap["Blk 72"] = jsonObject.optInt("blk72", 0)
-                    geofenceRiskMap["Blk 73"] = jsonObject.optInt("blk73", 0)
-                    geofenceRiskMap["Blk 23"] = jsonObject.optInt("blk23", 0)
-                    geofenceRiskMap["Blk 8"] = jsonObject.optInt("blk8", 0)
-                    geofenceRiskMap["SIT"] = jsonObject.optInt("blkSIT", 0)
-                    geofenceTTCMap["Blk 51"] = jsonObject.optDouble("ttc51", 0.0).toDouble()
-                    geofenceTTCMap["Blk 72"] = jsonObject.optDouble("ttc72", 0.0).toDouble()
-                    geofenceTTCMap["Blk 73"] = jsonObject.optDouble("ttc73", 0.0).toDouble()
-                    geofenceTTCMap["Blk 23"] = jsonObject.optDouble("ttc23", 0.0).toDouble()
-                    geofenceTTCMap["Blk 8"] = jsonObject.optDouble("ttc8", 0.0).toDouble()
-                    geofenceTTCMap["SIT"] = jsonObject.optDouble("ttcSIT", 0.0).toDouble()
-
-                    risk8Value = jsonObject.optInt("blk8", 0)
-                    risk23Value = jsonObject.optInt("blk23", 0)
-                    risk73Value = jsonObject.optInt("blk73", 0)
-                    risk72Value = jsonObject.optInt("blk72", 0)
-                    risk51Value = jsonObject.optInt("blk51", 0)
-                    riskSITValue = jsonObject.optInt("blkSIT", 0)
-
-                        updateCircle23()
-                        updateCircle8()
-                        updateCircle51()
-                        updateCircle72()
-                        updateCircle73()
-                        updateCircleSIT()
-
-
-                    val textView23 = findViewById<TextView>(R.id.blk23risktextView)
-                    runOnUiThread {
-                        updateRiskContainer23Color(risk23Value)
-                        val displayText = "Current Risk Value: $risk23Value"
-                        textView23.text = displayText
+                response.use {
+                    if (!response.isSuccessful) {
+                        Log.w("RiskData", "Risk request failed with HTTP ${response.code}")
+                        return
                     }
-
-                    val textView8 = findViewById<TextView>(R.id.blk8risktextView)
-                    runOnUiThread {
-                        updateRiskContainer8Color(risk8Value)
-                        val displayText = "Current Risk Value: $risk8Value"
-                        textView8.text = displayText
+                    try {
+                        val array = JSONArray(response.body?.string().orEmpty())
+                        if (array.length() == 0) return
+                        val data = array.getJSONObject(0)
+                        val risks = mapOf(
+                            "Blk 8" to data.optInt("blk8", 0), "Blk 23" to data.optInt("blk23", 0),
+                            "Blk 51" to data.optInt("blk51", 0), "Blk 72" to data.optInt("blk72", 0),
+                            "Blk 73" to data.optInt("blk73", 0), "SIT" to data.optInt("blkSIT", 0)
+                        )
+                        val ttc = mapOf(
+                            "Blk 8" to data.optDouble("ttc8", 0.0), "Blk 23" to data.optDouble("ttc23", 0.0),
+                            "Blk 51" to data.optDouble("ttc51", 0.0), "Blk 72" to data.optDouble("ttc72", 0.0),
+                            "Blk 73" to data.optDouble("ttc73", 0.0), "SIT" to data.optDouble("ttcSIT", 0.0)
+                        )
+                        geofenceRiskMap.putAll(risks)
+                        geofenceTTCMap.putAll(ttc)
+                        risk8Value = risks.getValue("Blk 8")
+                        risk23Value = risks.getValue("Blk 23")
+                        risk51Value = risks.getValue("Blk 51")
+                        risk72Value = risks.getValue("Blk 72")
+                        risk73Value = risks.getValue("Blk 73")
+                        riskSITValue = risks.getValue("SIT")
+                        runOnUiThread { updateAllRiskUi(); calculateDistance() }
+                    } catch (e: Exception) {
+                        Log.e("RiskData", "Unable to parse risk response", e)
                     }
-
-                    val textViewSIT = findViewById<TextView>(R.id.SITrisktextView)
-                    runOnUiThread {
-                        updateRiskContainerSITColor(riskSITValue)
-                        val displayText = "Current Risk Value: $riskSITValue"
-                        textViewSIT.text = displayText
-                    }
-
-                    val textView72 = findViewById<TextView>(R.id.blk72risktextView)
-                    runOnUiThread {
-                        updateRiskContainer72Color(risk72Value)
-                        val displayText = "Current Risk Value: $risk72Value"
-                        textView72.text = displayText
-                    }
-
-                    val textView73 = findViewById<TextView>(R.id.blk73risktextView)
-                    runOnUiThread {
-                        updateRiskContainer73Color(risk73Value)
-                        val displayText = "Current Risk Value: $risk73Value"
-                        textView73.text = displayText
-                    }
-
-                    val textView51 = findViewById<TextView>(R.id.blk51risktextView)
-                    runOnUiThread {
-                        updateRiskContainer51Color(risk51Value)
-                        val displayText = "Current Risk Value: $risk51Value"
-                        textView51.text = displayText
-                    }
-
-                } else {
-                    // Handle empty or invalid JSON response here
                 }
-                calculateDistance()
             }
         })
     }
-    private fun updateCircle8(){
-        polygonAnnotation8?.fillColorString = getColorForRisk(risk8Value)
-        polygonAnnotation8?.fillOutlineColorString= getColorForRisk(risk8Value)
-        polygonAnnotationManager8?.update(polygonAnnotation8!!)
-        Log.d("Circle color", "Circle color updated")
+
+    private fun updateAllRiskUi() {
+        updateCircle(polygonAnnotation8, polygonAnnotationManager8, risk8Value)
+        updateCircle(polygonAnnotation23, polygonAnnotationManager23, risk23Value)
+        updateCircle(polygonAnnotation51, polygonAnnotationManager51, risk51Value)
+        updateCircle(polygonAnnotation72, polygonAnnotationManager72, risk72Value)
+        updateCircle(polygonAnnotation73, polygonAnnotationManager73, risk73Value)
+        updateCircle(polygonAnnotationSIT, polygonAnnotationManagerSIT, riskSITValue)
+        updateRiskContainer23Color(risk23Value); updateRiskContainer8Color(risk8Value)
+        updateRiskContainer51Color(risk51Value); updateRiskContainer72Color(risk72Value)
+        updateRiskContainer73Color(risk73Value); updateRiskContainerSITColor(riskSITValue)
+        findViewById<TextView>(R.id.blk23risktextView).text = "Current Risk Value: $risk23Value"
+        findViewById<TextView>(R.id.blk8risktextView).text = "Current Risk Value: $risk8Value"
+        findViewById<TextView>(R.id.blk51risktextView).text = "Current Risk Value: $risk51Value"
+        findViewById<TextView>(R.id.blk72risktextView).text = "Current Risk Value: $risk72Value"
+        findViewById<TextView>(R.id.blk73risktextView).text = "Current Risk Value: $risk73Value"
+        findViewById<TextView>(R.id.SITrisktextView).text = "Current Risk Value: $riskSITValue"
     }
-    private fun updateCircle23(){
-        polygonAnnotation23?.fillColorString = getColorForRisk(risk23Value)
-        polygonAnnotation23?.fillOutlineColorString= getColorForRisk(risk23Value)
-        polygonAnnotationManager23?.update(polygonAnnotation23!!)
+
+    private fun updateCircle(annotation: PolygonAnnotation?, manager: PolygonAnnotationManager?, riskValue: Int) {
+        annotation?.let { item ->
+            item.fillColorString = getColorForRisk(riskValue)
+            item.fillOutlineColorString = getColorForRisk(riskValue)
+            manager?.update(item)
+        }
     }
-    private fun updateCircle51(){
-        polygonAnnotation51?.fillColorString = getColorForRisk(risk51Value)
-        polygonAnnotation51?.fillOutlineColorString= getColorForRisk(risk51Value)
-        polygonAnnotationManager51?.update(polygonAnnotation51!!)
-    }
-    private fun updateCircle72(){
-        polygonAnnotation72?.fillColorString = getColorForRisk(risk72Value)
-        polygonAnnotation72?.fillOutlineColorString= getColorForRisk(risk72Value)
-        polygonAnnotationManager72?.update(polygonAnnotation72!!)
-    }
-    private fun updateCircle73(){
-        polygonAnnotation73?.fillColorString = getColorForRisk(risk73Value)
-        polygonAnnotation73?.fillOutlineColorString= getColorForRisk(risk73Value)
-        polygonAnnotationManager73?.update(polygonAnnotation73!!)
-    }
-    private fun updateCircleSIT(){
-        polygonAnnotationSIT?.fillColorString = getColorForRisk(riskSITValue)
-        polygonAnnotationSIT?.fillOutlineColorString= getColorForRisk(riskSITValue)
-        polygonAnnotationManagerSIT?.update(polygonAnnotationSIT!!)
-    }
-    //Graph
-//BLK 8
-    private fun fetchDataFromServer(barChart: BarChart) {
-        GlobalScope.launch(Dispatchers.IO) {
+    // Historical risk charts shown in the map detail cards.
+    private fun fetchChartData(barChart: BarChart, endpoint: String) {
+        lifecycleScope.launch {
             try {
-                val client = OkHttpClient()
-                val request = Request.Builder()
-                    .url("${BuildConfig.BACKEND_BASE_URL}/risk8")
-                    .build()
-
-                val response = client.newCall(request).execute()
-                val responseData = response.body?.string()
-
-                // Parse the JSON data
-                val entries = parseJsonData(responseData)
-
-                // Update the BarChart with the data and x-axis labels
+                val entries = withContext(Dispatchers.IO) {
+                    val request = Request.Builder().url("${BuildConfig.BACKEND_BASE_URL}/$endpoint").build()
+                    httpClient.newCall(request).execute().use { response ->
+                        if (!response.isSuccessful) throw IllegalStateException("$endpoint returned HTTP ${response.code}")
+                        parseChartData(response.body?.string())
+                    }
+                }
                 updateBarChart(barChart, entries)
-
-            } catch (e: IOException) {
-                e.printStackTrace()
+            } catch (e: Exception) {
+                Log.e("RiskChart", "Unable to load $endpoint", e)
             }
         }
     }
 
-    private fun parseJsonData(jsonData: String?): ArrayList<BarEntry> {
-        val entries = ArrayList<BarEntry>()
-
-        // Initialize an array to hold the risk values for each hour from 7 to 19
-        val riskValues = Array(13) { 0f }
-
-        jsonData?.let {
-            val jsonArray = JSONArray(it)
-            for (i in 0 until jsonArray.length()) {
-                val jsonObject: JSONObject = jsonArray.getJSONObject(i)
-                val riskValue = jsonObject.getDouble("avgrisk").toFloat() // Parse as float
-                val time = jsonObject.getString("hour").toInt()
-
-                // Store the risk value in the corresponding index of the riskValues array
-                // For example, if the hour is 8, the risk value will be stored at index 1 (8-7)
-                riskValues[time - 7] = riskValue
+    private fun parseChartData(jsonData: String?): ArrayList<BarEntry> {
+        val values = FloatArray(13)
+        if (!jsonData.isNullOrBlank()) {
+            val array = JSONArray(jsonData)
+            for (i in 0 until array.length()) {
+                val item = array.optJSONObject(i) ?: continue
+                val hour = item.optInt("hour", -1)
+                if (hour in 7..19) values[hour - 7] = item.optDouble("avgrisk", 0.0).toFloat()
             }
         }
-
-        // Populate the entries list with the risk values and hours from 7 to 19
-        for (i in 0 until 13) {
-            val riskValue = riskValues[i]
-            val timeFloat = i.toFloat() // Use i as the hour index (7 to 19)
-            entries.add(BarEntry(timeFloat, riskValue))
-        }
-
-        return entries
+        return ArrayList<BarEntry>().apply { values.forEachIndexed { i, value -> add(BarEntry(i.toFloat(), value)) } }
     }
 
     private fun updateBarChart(barChart: BarChart, entries: ArrayList<BarEntry>) {
-        val dataSet = BarDataSet(entries, "Risk Values")
-        val dataSets: ArrayList<IBarDataSet> = ArrayList()
-        dataSets.add(dataSet)
-
-        val barData = BarData(dataSets)
-        barChart.data = barData
-        barChart.description=null
-
-        // Customize the appearance of the chart if needed
-        // For example:
-        dataSet.color = resources.getColor(R.color.blue)
-        dataSet.setDrawValues(true) // Enable displaying values above the bars
-        dataSet.valueFormatter = MyValueFormatter() // Set a custom value formatter for the data values
-        dataSet.isHighlightEnabled = false // Disable highlighting bars when selected
-
-        val xAxis = barChart.xAxis
-        xAxis.valueFormatter = IndexAxisValueFormatter(generateXAxisLabels())
-        xAxis.position = XAxis.XAxisPosition.BOTTOM
-        xAxis.setDrawGridLines(false)
-        xAxis.labelCount = 13 // Set the number of labels to be displayed (13 for 7 am to 7 pm)
-        xAxis.granularity = 1f
-
-        val yAxisLeft = barChart.axisLeft
-        yAxisLeft.axisMinimum = 0f
-        yAxisLeft.axisMaximum = 10f
+        val dataSet = BarDataSet(entries, "Average risk").apply {
+            color = ContextCompat.getColor(this@TurnByTurnActivity, R.color.blue)
+            setDrawValues(true)
+            valueFormatter = MyValueFormatter()
+            isHighlightEnabled = false
+        }
+        barChart.data = BarData(dataSet)
+        barChart.description = null
         barChart.axisRight.isEnabled = false
-        // Refresh the chart
+        barChart.axisLeft.axisMinimum = 0f
+        barChart.axisLeft.axisMaximum = 10f
+        barChart.xAxis.apply {
+            valueFormatter = IndexAxisValueFormatter(generateXAxisLabels())
+            position = XAxis.XAxisPosition.BOTTOM
+            setDrawGridLines(false)
+            labelCount = 13
+            granularity = 1f
+        }
         barChart.invalidate()
     }
 
-    private fun generateXAxisLabels(): List<String> {
-        val labels = mutableListOf<String>()
-        for (hour in 7 until 20) {
-            labels.add(String.format("%02d", hour))
-        }
-        return labels
-    }
+    private fun generateXAxisLabels(): List<String> = (7..19).map { String.format("%02d", it) }
 
     class MyValueFormatter : ValueFormatter() {
-        override fun getFormattedValue(value: Float): String {
-            return String.format("%.2f", value) // Format the value with 2 decimal places
-        }
-    }
-
-    //blk 23
-    private fun fetchDataFromServer23(barChart: BarChart) {
-        GlobalScope.launch(Dispatchers.IO) {
-            try {
-                val client = OkHttpClient()
-                val request = Request.Builder()
-                    .url("${BuildConfig.BACKEND_BASE_URL}/risk23")
-                    .build()
-
-                val response = client.newCall(request).execute()
-                val responseData = response.body?.string()
-
-                // Parse the JSON data
-                val entries = parseJsonData23(responseData)
-
-                // Update the BarChart with the data and x-axis labels
-                updateBarChart23(barChart, entries)
-
-            } catch (e: IOException) {
-                e.printStackTrace()
-            }
-        }
-    }
-
-    private fun parseJsonData23(jsonData: String?): ArrayList<BarEntry> {
-        val entries = ArrayList<BarEntry>()
-
-        // Initialize an array to hold the risk values for each hour from 7 to 19
-        val riskValues = Array(13) { 0f }
-
-        jsonData?.let {
-            val jsonArray = JSONArray(it)
-            for (i in 0 until jsonArray.length()) {
-                val jsonObject: JSONObject = jsonArray.getJSONObject(i)
-                val riskValue = jsonObject.getDouble("avgrisk").toFloat() // Parse as float
-                val time = jsonObject.getString("hour").toInt()
-
-                // Store the risk value in the corresponding index of the riskValues array
-                // For example, if the hour is 8, the risk value will be stored at index 1 (8-7)
-                riskValues[time - 7] = riskValue
-            }
-        }
-
-        // Populate the entries list with the risk values and hours from 7 to 19
-        for (i in 0 until 13) {
-            val riskValue = riskValues[i]
-            val timeFloat = i.toFloat() // Use i as the hour index (7 to 19)
-            entries.add(BarEntry(timeFloat, riskValue))
-        }
-
-        return entries
-    }
-
-    private fun updateBarChart23(barChart: BarChart, entries: ArrayList<BarEntry>) {
-        val dataSet = BarDataSet(entries, "Risk Values")
-        val dataSets: ArrayList<IBarDataSet> = ArrayList()
-        dataSets.add(dataSet)
-
-        val barData = BarData(dataSets)
-        barChart.data = barData
-        barChart.description=null
-        // Customize the appearance of the chart if needed
-        // For example:
-        dataSet.color = resources.getColor(R.color.blue)
-        dataSet.setDrawValues(true) // Enable displaying values above the bars
-        dataSet.valueFormatter = MyValueFormatter() // Set a custom value formatter for the data values
-        dataSet.isHighlightEnabled = false // Disable highlighting bars when selected
-
-        val xAxis = barChart.xAxis
-        xAxis.valueFormatter = IndexAxisValueFormatter(generateXAxisLabels())
-        xAxis.position = XAxis.XAxisPosition.BOTTOM
-        xAxis.setDrawGridLines(false)
-        xAxis.labelCount = 13 // Set the number of labels to be displayed (13 for 7 am to 7 pm)
-        xAxis.granularity = 1f
-
-        val yAxisLeft = barChart.axisLeft
-        yAxisLeft.axisMinimum = 0f
-        yAxisLeft.axisMaximum = 10f
-        barChart.axisRight.isEnabled = false
-        // Refresh the chart
-        barChart.invalidate()
-    }
-    //block 51
-
-    private fun fetchDataFromServer51(barChart: BarChart) {
-        GlobalScope.launch(Dispatchers.IO) {
-            try {
-                val client = OkHttpClient()
-                val request = Request.Builder()
-                    .url("${BuildConfig.BACKEND_BASE_URL}/risk51")
-                    .build()
-
-                val response = client.newCall(request).execute()
-                val responseData = response.body?.string()
-
-                // Parse the JSON data
-                val entries = parseJsonData51(responseData)
-
-                // Update the BarChart with the data and x-axis labels
-                updateBarChart51(barChart, entries)
-
-            } catch (e: IOException) {
-                e.printStackTrace()
-            }
-        }
-    }
-
-    private fun parseJsonData51(jsonData: String?): ArrayList<BarEntry> {
-        val entries = ArrayList<BarEntry>()
-
-        // Initialize an array to hold the risk values for each hour from 7 to 19
-        val riskValues = Array(13) { 0f }
-
-        jsonData?.let {
-            val jsonArray = JSONArray(it)
-            for (i in 0 until jsonArray.length()) {
-                val jsonObject: JSONObject = jsonArray.getJSONObject(i)
-                val riskValue = jsonObject.getDouble("avgrisk").toFloat() // Parse as float
-                val time = jsonObject.getString("hour").toInt()
-
-                // Store the risk value in the corresponding index of the riskValues array
-                // For example, if the hour is 8, the risk value will be stored at index 1 (8-7)
-                riskValues[time - 7] = riskValue
-            }
-        }
-
-        // Populate the entries list with the risk values and hours from 7 to 19
-        for (i in 0 until 13) {
-            val riskValue = riskValues[i]
-            val timeFloat = i.toFloat() // Use i as the hour index (7 to 19)
-            entries.add(BarEntry(timeFloat, riskValue))
-        }
-
-        return entries
-    }
-
-    private fun updateBarChart51(barChart: BarChart, entries: ArrayList<BarEntry>) {
-        val dataSet = BarDataSet(entries, "Risk Values")
-        val dataSets: ArrayList<IBarDataSet> = ArrayList()
-        dataSets.add(dataSet)
-
-        val barData = BarData(dataSets)
-        barChart.data = barData
-        barChart.description=null
-        // Customize the appearance of the chart if needed
-        // For example:
-        dataSet.color = resources.getColor(R.color.blue)
-        dataSet.setDrawValues(true) // Enable displaying values above the bars
-        dataSet.valueFormatter = MyValueFormatter() // Set a custom value formatter for the data values
-        dataSet.isHighlightEnabled = false // Disable highlighting bars when selected
-
-        val xAxis = barChart.xAxis
-        xAxis.valueFormatter = IndexAxisValueFormatter(generateXAxisLabels())
-        xAxis.position = XAxis.XAxisPosition.BOTTOM
-        xAxis.setDrawGridLines(false)
-        xAxis.labelCount = 13 // Set the number of labels to be displayed (13 for 7 am to 7 pm)
-        xAxis.granularity = 1f
-
-        val yAxisLeft = barChart.axisLeft
-        yAxisLeft.axisMinimum = 0f
-        yAxisLeft.axisMaximum = 10f
-        barChart.axisRight.isEnabled = false
-        // Refresh the chart
-        barChart.invalidate()
-    }
-    //blk 72
-
-    private fun fetchDataFromServer72(barChart: BarChart) {
-        GlobalScope.launch(Dispatchers.IO) {
-            try {
-                val client = OkHttpClient()
-                val request = Request.Builder()
-                    .url("${BuildConfig.BACKEND_BASE_URL}/risk72")
-                    .build()
-
-                val response = client.newCall(request).execute()
-                val responseData = response.body?.string()
-
-                // Parse the JSON data
-                val entries = parseJsonData72(responseData)
-
-                // Update the BarChart with the data and x-axis labels
-                updateBarChart72(barChart, entries)
-
-            } catch (e: IOException) {
-                e.printStackTrace()
-            }
-        }
-    }
-
-    private fun parseJsonData72(jsonData: String?): ArrayList<BarEntry> {
-        val entries = ArrayList<BarEntry>()
-
-        // Initialize an array to hold the risk values for each hour from 7 to 19
-        val riskValues = Array(13) { 0f }
-
-        jsonData?.let {
-            val jsonArray = JSONArray(it)
-            for (i in 0 until jsonArray.length()) {
-                val jsonObject: JSONObject = jsonArray.getJSONObject(i)
-                val riskValue = jsonObject.getDouble("avgrisk").toFloat() // Parse as float
-                val time = jsonObject.getString("hour").toInt()
-
-                // Store the risk value in the corresponding index of the riskValues array
-                // For example, if the hour is 8, the risk value will be stored at index 1 (8-7)
-                riskValues[time - 7] = riskValue
-            }
-        }
-
-        // Populate the entries list with the risk values and hours from 7 to 19
-        for (i in 0 until 13) {
-            val riskValue = riskValues[i]
-            val timeFloat = i.toFloat() // Use i as the hour index (7 to 19)
-            entries.add(BarEntry(timeFloat, riskValue))
-        }
-
-        return entries
-    }
-
-    private fun updateBarChart72(barChart: BarChart, entries: ArrayList<BarEntry>) {
-        val dataSet = BarDataSet(entries, "Risk Values")
-        val dataSets: ArrayList<IBarDataSet> = ArrayList()
-        dataSets.add(dataSet)
-
-        val barData = BarData(dataSets)
-        barChart.data = barData
-        barChart.description=null
-        // Customize the appearance of the chart if needed
-        // For example:
-        dataSet.color = resources.getColor(R.color.blue)
-        dataSet.setDrawValues(true) // Enable displaying values above the bars
-        dataSet.valueFormatter = MyValueFormatter() // Set a custom value formatter for the data values
-        dataSet.isHighlightEnabled = false // Disable highlighting bars when selected
-
-        val xAxis = barChart.xAxis
-        xAxis.valueFormatter = IndexAxisValueFormatter(generateXAxisLabels())
-        xAxis.position = XAxis.XAxisPosition.BOTTOM
-        xAxis.setDrawGridLines(false)
-        xAxis.labelCount = 13 // Set the number of labels to be displayed (13 for 7 am to 7 pm)
-        xAxis.granularity = 1f
-
-        val yAxisLeft = barChart.axisLeft
-        yAxisLeft.axisMinimum = 0f
-        yAxisLeft.axisMaximum = 10f
-        barChart.axisRight.isEnabled = false
-        // Refresh the chart
-        barChart.invalidate()
-    }
-
-    //block 73
-    private fun fetchDataFromServer73(barChart: BarChart) {
-        GlobalScope.launch(Dispatchers.IO) {
-            try {
-                val client = OkHttpClient()
-                val request = Request.Builder()
-                    .url("${BuildConfig.BACKEND_BASE_URL}/risk73")
-                    .build()
-
-                val response = client.newCall(request).execute()
-                val responseData = response.body?.string()
-
-                // Parse the JSON data
-                val entries = parseJsonData73(responseData)
-
-                // Update the BarChart with the data and x-axis labels
-                updateBarChart73(barChart, entries)
-
-            } catch (e: IOException) {
-                e.printStackTrace()
-            }
-        }
-    }
-
-    private fun parseJsonData73(jsonData: String?): ArrayList<BarEntry> {
-        val entries = ArrayList<BarEntry>()
-
-        // Initialize an array to hold the risk values for each hour from 7 to 19
-        val riskValues = Array(13) { 0f }
-
-        jsonData?.let {
-            val jsonArray = JSONArray(it)
-            for (i in 0 until jsonArray.length()) {
-                val jsonObject: JSONObject = jsonArray.getJSONObject(i)
-                val riskValue = jsonObject.getDouble("avgrisk").toFloat() // Parse as float
-                val time = jsonObject.getString("hour").toInt()
-
-                // Store the risk value in the corresponding index of the riskValues array
-                // For example, if the hour is 8, the risk value will be stored at index 1 (8-7)
-                riskValues[time - 7] = riskValue
-            }
-        }
-
-        // Populate the entries list with the risk values and hours from 7 to 19
-        for (i in 0 until 13) {
-            val riskValue = riskValues[i]
-            val timeFloat = i.toFloat() // Use i as the hour index (7 to 19)
-            entries.add(BarEntry(timeFloat, riskValue))
-        }
-
-        return entries
-    }
-
-    private fun updateBarChart73(barChart: BarChart, entries: ArrayList<BarEntry>) {
-        val dataSet = BarDataSet(entries, "Risk Values")
-        val dataSets: ArrayList<IBarDataSet> = ArrayList()
-        dataSets.add(dataSet)
-
-        val barData = BarData(dataSets)
-        barChart.data = barData
-        barChart.description=null
-        // Customize the appearance of the chart if needed
-        // For example:
-        dataSet.color = resources.getColor(R.color.blue)
-        dataSet.setDrawValues(true) // Enable displaying values above the bars
-        dataSet.valueFormatter = MyValueFormatter() // Set a custom value formatter for the data values
-        dataSet.isHighlightEnabled = false // Disable highlighting bars when selected
-
-        val xAxis = barChart.xAxis
-        xAxis.valueFormatter = IndexAxisValueFormatter(generateXAxisLabels())
-        xAxis.position = XAxis.XAxisPosition.BOTTOM
-        xAxis.setDrawGridLines(false)
-        xAxis.labelCount = 13 // Set the number of labels to be displayed (13 for 7 am to 7 pm)
-        xAxis.granularity = 1f
-
-        val yAxisLeft = barChart.axisLeft
-        yAxisLeft.axisMinimum = 0f
-        yAxisLeft.axisMaximum = 10f
-        barChart.axisRight.isEnabled = false
-        // Refresh the chart
-        barChart.invalidate()
-    }
-
-    //SIT
-    private fun fetchDataFromServerSIT(barChart: BarChart) {
-        GlobalScope.launch(Dispatchers.IO) {
-            try {
-                val client = OkHttpClient()
-                val request = Request.Builder()
-                    .url("${BuildConfig.BACKEND_BASE_URL}/riskSIT")
-                    .build()
-
-                val response = client.newCall(request).execute()
-                val responseData = response.body?.string()
-
-                // Parse the JSON data
-                val entries = parseJsonDataSIT(responseData)
-
-                // Update the BarChart with the data and x-axis labels
-                updateBarChartSIT(barChart, entries)
-
-            } catch (e: IOException) {
-                e.printStackTrace()
-            }
-        }
-    }
-
-    private fun parseJsonDataSIT(jsonData: String?): ArrayList<BarEntry> {
-        val entries = ArrayList<BarEntry>()
-
-        // Initialize an array to hold the risk values for each hour from 7 to 19
-        val riskValues = Array(13) { 0f }
-
-        jsonData?.let {
-            val jsonArray = JSONArray(it)
-            for (i in 0 until jsonArray.length()) {
-                val jsonObject: JSONObject = jsonArray.getJSONObject(i)
-                val riskValue = jsonObject.getDouble("avgrisk").toFloat() // Parse as float
-                val time = jsonObject.getString("hour").toInt()
-
-                // Store the risk value in the corresponding index of the riskValues array
-                // For example, if the hour is 8, the risk value will be stored at index 1 (8-7)
-                riskValues[time - 7] = riskValue
-            }
-        }
-
-        // Populate the entries list with the risk values and hours from 7 to 19
-        for (i in 0 until 13) {
-            val riskValue = riskValues[i]
-            val timeFloat = i.toFloat() // Use i as the hour index (7 to 19)
-            entries.add(BarEntry(timeFloat, riskValue))
-        }
-
-        return entries
-    }
-
-    private fun updateBarChartSIT(barChart: BarChart, entries: ArrayList<BarEntry>) {
-        val dataSet = BarDataSet(entries, "Risk Values")
-        val dataSets: ArrayList<IBarDataSet> = ArrayList()
-        dataSets.add(dataSet)
-
-        val barData = BarData(dataSets)
-        barChart.data = barData
-        barChart.description=null
-        // Customize the appearance of the chart if needed
-        // For example:
-        dataSet.color = resources.getColor(R.color.blue)
-        dataSet.setDrawValues(true) // Enable displaying values above the bars
-        dataSet.valueFormatter = MyValueFormatter() // Set a custom value formatter for the data values
-        dataSet.isHighlightEnabled = false // Disable highlighting bars when selected
-
-        val xAxis = barChart.xAxis
-        xAxis.valueFormatter = IndexAxisValueFormatter(generateXAxisLabels())
-        xAxis.position = XAxis.XAxisPosition.BOTTOM
-        xAxis.setDrawGridLines(false)
-        xAxis.labelCount = 13 // Set the number of labels to be displayed (13 for 7 am to 7 pm)
-        xAxis.granularity = 1f
-
-        val yAxisLeft = barChart.axisLeft
-        yAxisLeft.axisMinimum = 0f
-        yAxisLeft.axisMaximum = 10f
-        barChart.axisRight.isEnabled = false
-        // Refresh the chart
-        barChart.invalidate()
+        override fun getFormattedValue(value: Float): String = String.format("%.2f", value)
     }
 }
-
-
-
-
