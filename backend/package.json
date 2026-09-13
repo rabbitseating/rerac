@@ -1,0 +1,13 @@
+{
+  "name": "rerac-backend",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "start": "node database.js",
+    "check": "node --check database.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "mysql2": "^3.3.0"
+  }
+}

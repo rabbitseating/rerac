@@ -1,0 +1,10 @@
+# Copy this file to local.properties and fill in your own values.
+# sdk.dir is machine-specific. Example on Windows:
+# sdk.dir=C\:\\Users\\yourname\\AppData\\Local\\Android\\Sdk
+
+MAPBOX_DOWNLOADS_TOKEN=your_secret_mapbox_downloads_token
+MAPBOX_ACCESS_TOKEN=your_public_mapbox_access_token
+OPENWEATHER_API_KEY=your_openweather_api_key
+
+# Android emulator -> host machine
+BACKEND_BASE_URL=http://10.0.2.2:3000

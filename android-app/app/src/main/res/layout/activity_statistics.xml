@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    tools:context=".StatisticsActivity">
+
+    <androidx.appcompat.widget.Toolbar
+        android:id="@+id/toolbar"
+        android:layout_width="match_parent"
+        android:layout_height="?attr/actionBarSize"
+        android:elevation="4dp"
+        android:theme="@style/ThemeOverlay.AppCompat.ActionBar"
+        app:title="Statistics"
+        app:navigationIcon="@drawable/baseline_arrow_back_24"
+        tools:ignore="MissingConstraints" />
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_marginTop="?attr/actionBarSize"
+        app:layout_constraintTop_toBottomOf="@id/toolbar"
+        app:layout_constraintBottom_toBottomOf="parent"
+        android:padding="10dp">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Block 8"
+                android:textSize="30sp" />
+
+            <com.github.mikephil.charting.charts.BarChart
+                android:id="@+id/barChart"
+                android:layout_width="match_parent"
+                android:layout_height="200dp" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Block 23"
+                android:textSize="30sp"
+                app:layout_constraintTop_toBottomOf="@id/barChart"
+                android:paddingTop="10dp"/>
+
+            <com.github.mikephil.charting.charts.BarChart
+                android:id="@+id/barChart1"
+                android:layout_width="match_parent"
+                android:layout_height="200dp" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Block 51"
+                android:textSize="30sp"
+                app:layout_constraintTop_toBottomOf="@id/barChart"
+                android:paddingTop="10dp"/>
+
+            <com.github.mikephil.charting.charts.BarChart
+                android:id="@+id/barChart2"
+                android:layout_width="match_parent"
+                android:layout_height="200dp" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Block 72"
+                android:textSize="30sp"
+                app:layout_constraintTop_toBottomOf="@id/barChart"
+                android:paddingTop="10dp"/>
+
+            <com.github.mikephil.charting.charts.BarChart
+                android:id="@+id/barChart3"
+                android:layout_width="match_parent"
+                android:layout_height="200dp" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Block 73"
+                android:textSize="30sp"
+                app:layout_constraintTop_toBottomOf="@id/barChart"
+                android:paddingTop="10dp"/>
+
+            <com.github.mikephil.charting.charts.BarChart
+                android:id="@+id/barChart4"
+                android:layout_width="match_parent"
+                android:layout_height="200dp" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="SIT"
+                android:textSize="30sp"
+                app:layout_constraintTop_toBottomOf="@id/barChart"
+                android:paddingTop="10dp"/>
+
+            <com.github.mikephil.charting.charts.BarChart
+                android:id="@+id/barChart5"
+                android:layout_width="match_parent"
+                android:layout_height="200dp" />
+
+        </LinearLayout>
+    </ScrollView>
+
+</androidx.constraintlayout.widget.ConstraintLayout>

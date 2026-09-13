@@ -1,0 +1,15 @@
+# Secrets / local configuration
+.env
+**/.env
+**/local.properties
+
+# Android / Gradle generated files
+**/.gradle/
+**/build/
+**/.idea/
+*.iml
+.DS_Store
+
+# Node.js
+**/node_modules/
+npm-debug.log*
