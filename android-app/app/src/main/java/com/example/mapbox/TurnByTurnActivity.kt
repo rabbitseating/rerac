@@ -154,17 +154,9 @@ import java.util.Locale
  * This example demonstrates a basic turn-by-turn navigation experience by putting together some UI elements to showcase
  * navigation camera transitions, guidance instructions banners and playback, and progress along the route.
  *
- * Before running the example make sure you have put your access_token in the correct place
- * inside [app/src/main/res/values/mapbox_access_token.xml]. If not present then add this file
- * at the location mentioned above and add the following content to it
- *
- * <?xml version="1.0" encoding="utf-8"?>
- * <resources xmlns:tools="http://schemas.android.com/tools">
- *     <string name="mapbox_access_token"><PUT_YOUR_ACCESS_TOKEN_HERE></string>
- * </resources>
- *
- * The example assumes that you have granted location permissions and does not enforce it. However,
- * the permission is essential for proper functioning of this example. The final portfolio version uses the device location for navigation.
+ * Local configuration is read from android-app/local.properties. Copy the provided
+ * example and supply your own credentials; do not store access tokens in source XML.
+ * The launcher requests location permission before opening navigation.
  *
  * How to use this example:
  * - You can long-click the map to select a destination.
@@ -1042,7 +1034,6 @@ class TurnByTurnActivity : AppCompatActivity(), NavigationView.OnNavigationItemS
         MapboxNavigationApp.setup(
             NavigationOptions.Builder(this)
                 .accessToken(getString(R.string.mapbox_access_token))
-                // comment out the location engine setting block to disable simulation
                 .build()
         )
 
