@@ -4,6 +4,8 @@ RERAC is an academic intelligent-transport prototype built to visualise road-ris
 
 The project demonstrates the full path from generated transport-risk data to a location-aware mobile interface: data generation, persistence, API delivery, mapping, navigation, proximity warnings and historical visualisation.
 
+> **Archived academic project:** completed previously and uploaded retrospectively for portfolio use. The source has since received cleanup changes; this copy has not been freshly compiled or tested end-to-end. Screenshots show the original project.
+
 ## Screenshots
 
 These screenshots were extracted from the original project report and show the final Android/Mapbox prototype. The portfolio code has since been cleaned for public release, so small visual details may differ from a fresh local build.
@@ -55,7 +57,7 @@ That migration allowed the final prototype to combine routing, navigation-camera
 
 ## Demo flow
 
-A typical demonstration of the prototype is:
+The original prototype demonstrated the following flow. This is a description of the project, rather than a freshly verified test of the cleaned archive:
 
 1. Launch the Android app and grant location access.
 2. View monitored locations and their current risk-radius colours on the map.
@@ -75,7 +77,9 @@ docs/images/       Screenshots extracted from the original project report
 .github/workflows/ Lightweight source checks
 ```
 
-## Quick start
+## Optional local setup
+
+These instructions document the demo configuration for anyone who wants to attempt a local run. Running the project is not required to browse this archive; historical SDK compatibility and dependency access may need additional work.
 
 ### 1. Create the MySQL database
 
@@ -146,7 +150,7 @@ For a physical Android device, use an address that is reachable from that device
 
 ## Security and privacy
 
-The public-facing source is intentionally separated from local secrets. API tokens, MySQL passwords, `.env`, Android `local.properties`, Gradle build outputs and `node_modules` must not be committed.
+The public-facing source is intentionally separated from local secrets. API tokens, MySQL passwords, `.env`, Android `local.properties`, Gradle build outputs and `node_modules` must not be committed. Configuration examples contain placeholders only. Run `python scripts/check_secrets.py` before committing, or add `--history` to include reachable Git history. This check reports file locations without printing matched values.
 
 The repository contains **generated/demo data only**. It does not include the original non-public dataset or local credentials. The screenshots are from the project's own report and are included only to demonstrate the prototype UI.
 
@@ -165,6 +169,9 @@ The portfolio cleanup fixes activity exposure, replaces Mapbox replay simulation
 - The prototype is geographically focused on the monitored campus locations used during the project.
 - The Mapbox/Android dependencies intentionally remain close to the original implementation rather than being blindly upgraded to a newer major SDK.
 - Saved Locations and Report-an-Issue remain prototype concepts rather than completed production features.
+- Missing risk fields currently fall back to zero, failed requests can leave older readings visible, and missing chart hours appear as zero; these are prototype limitations, not verified safety measurements.
+- Proximity checks depend on successful backend polling and do not implement an offline alert system.
+- The traffic button currently changes its visual selection state without switching the map traffic display.
 - A production deployment would use an HTTPS-hosted backend, stronger API authentication, persistent user preferences and broader automated Android testing.
 
 ## Verification status
@@ -176,4 +183,4 @@ The portfolio cleanup fixes activity exposure, replaces Mapbox replay simulation
 
 ## Project status
 
-This repository is a cleaned and reproducible portfolio version of an academic prototype. It preserves the original architecture and major implementation choices while fixing issues that would make the source unsafe or misleading to publish. The Mapbox/Android dependencies intentionally remain close to the original project versions rather than being blindly upgraded.
+This repository is a cleaned portfolio archive of an academic prototype. Local build reproducibility has not been reverified. It preserves the original architecture and major implementation choices while fixing issues that would make the source unsafe or misleading to publish. The Mapbox/Android dependencies intentionally remain close to the original project versions rather than being blindly upgraded.

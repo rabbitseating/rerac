@@ -9,6 +9,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-node@v4
         with:
@@ -21,6 +23,9 @@ jobs:
           python-version: "3.12"
       - name: Check Python generator syntax
         run: python -m py_compile data-generator/generate_mock_data.py
+
+      - name: Check tracked files and history for credentials
+        run: python scripts/check_secrets.py --history
 
       - name: Check portfolio safety invariants
         run: |
